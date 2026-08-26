@@ -1,4 +1,4 @@
-defmodule Agent.API do
+defmodule BeamAgent.API do
   @moduledoc """
   Public API for executing agents.
   """
@@ -21,9 +21,9 @@ defmodule Agent.API do
     opts = Keyword.put(opts, :goal, goal)
 
     with {:ok, pid} <-
-           Agent.RunSupervisor.start_run(opts) do
+           BeamAgent.RunSupervisor.start_run(opts) do
       monitor_ref = Process.monitor(pid)
-      Agent.Runner.run(pid, self())
+      BeamAgent.Runner.run(pid, self())
 
       await_run(
         pid,
@@ -88,7 +88,7 @@ defmodule Agent.API do
     end
 
     {:error,
-     Agent.Run.timeout(
+     BeamAgent.Run.timeout(
        goal,
        timeout
      )}
@@ -96,7 +96,7 @@ defmodule Agent.API do
 
   defp terminate_runner(pid) do
     case DynamicSupervisor.terminate_child(
-           Agent.RunSupervisor,
+           BeamAgent.RunSupervisor,
            pid
          ) do
       :ok ->
@@ -109,7 +109,7 @@ defmodule Agent.API do
 
   defp crash_result(goal, reason) do
     {:error,
-     Agent.Run.crash(
+     BeamAgent.Run.crash(
        goal,
        reason
      )}

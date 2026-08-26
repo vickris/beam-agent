@@ -1,4 +1,4 @@
-defmodule Agent.Context do
+defmodule BeamAgent.Context do
   @moduledoc """
   Owns the information sent to the model.
 

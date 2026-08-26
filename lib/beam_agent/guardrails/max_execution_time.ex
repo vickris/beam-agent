@@ -1,9 +1,9 @@
-defmodule Agent.Guardrails.MaxExecutionTime do
+defmodule BeamAgent.Guardrails.MaxExecutionTime do
   @moduledoc """
   Prevents an agent from executing for longer than the allowed time.
   """
 
-  alias Agent.State
+  alias BeamAgent.State
 
   def check(%State{} = state, opts) do
     max_execution_time_ms = Keyword.get(opts, :max_execution_time_ms, 30_000)

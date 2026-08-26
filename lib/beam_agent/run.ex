@@ -1,4 +1,4 @@
-defmodule Agent.Run do
+defmodule BeamAgent.Run do
   @moduledoc """
   Represents a completed outcome of a single agent execution.
   """

@@ -1,5 +1,5 @@
-defmodule Agent.Guardrails do
-  alias Agent.Guardrails.{
+defmodule BeamAgent.Guardrails do
+  alias BeamAgent.Guardrails.{
     MaxContextMessages,
     MaxIterations,
     MaxExecutionTime,

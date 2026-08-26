@@ -1,10 +1,10 @@
-defmodule Agent.Run.Builder do
+defmodule BeamAgent.Run.Builder do
   @moduledoc """
-  Converts internal execution state into a structured `Agent.Run` representation, capturing the goal, answer, status, trace, and timestamps of the agent's execution.
+  Converts internal execution state into a structured `BeamAgent.Run` representation, capturing the goal, answer, status, trace, and timestamps of the agent's execution.
   """
 
-  alias Agent.Run
-  alias Agent.State
+  alias BeamAgent.Run
+  alias BeamAgent.State
 
   def success(%State{} = state) do
     build(state, verification_status: :passed)

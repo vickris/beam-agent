@@ -1,6 +1,6 @@
-defmodule DealAgent do
+defmodule BeamAgent do
   @moduledoc """
-  Documentation for `DealAgent`.
+  Documentation for `BeamAgent`.
   """
 
   @doc """
@@ -8,7 +8,7 @@ defmodule DealAgent do
 
   ## Examples
 
-      iex> DealAgent.hello()
+      iex> BeamAgent.hello()
       :world
 
   """

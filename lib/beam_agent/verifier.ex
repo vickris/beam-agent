@@ -1,12 +1,12 @@
-defmodule Agent.Verifier do
+defmodule BeamAgent.Verifier do
   @moduledoc """
   Verifies whether an agent execution satisfied
   the expected conditions.
   """
 
-  alias Agent.Run
+  alias BeamAgent.Run
 
-  def verify(%Agent.Run{} = run, opts \\ []) do
+  def verify(%BeamAgent.Run{} = run, opts \\ []) do
     required_tools = Keyword.get(opts, :required_tools, [])
 
     with :ok <- verify_execution(run),

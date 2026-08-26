@@ -1,13 +1,13 @@
-defmodule Agent.Runner do
+defmodule BeamAgent.Runner do
   @moduledoc """
   Executes one isolated agent run
   """
 
   use GenServer
 
-  alias Agent.Context
-  alias Agent.State
-  alias Agent.Guardrails
+  alias BeamAgent.Context
+  alias BeamAgent.State
+  alias BeamAgent.Guardrails
 
   def start_link(opts) do
     GenServer.start_link(
@@ -129,7 +129,7 @@ defmodule Agent.Runner do
       summary_char_limit: summary_char_limit
     ]
 
-    case Agent.Context.compress(
+    case BeamAgent.Context.compress(
            state.context,
            options
          ) do
@@ -207,7 +207,7 @@ defmodule Agent.Runner do
   end
 
   defp public_result(
-         %Agent.Run{
+         %BeamAgent.Run{
            execution_status: :finished,
            verification_status: :passed
          } = run
@@ -215,7 +215,7 @@ defmodule Agent.Runner do
     {:ok, run}
   end
 
-  defp public_result(%Agent.Run{} = run) do
+  defp public_result(%BeamAgent.Run{} = run) do
     {:error, run}
   end
 
@@ -237,7 +237,7 @@ defmodule Agent.Runner do
 
       {:error, reason, final_state} ->
         final_state
-        |> Agent.Run.Builder.execution_failed(reason)
+        |> BeamAgent.Run.Builder.execution_failed(reason)
         |> public_result()
     end
   end
@@ -247,9 +247,9 @@ defmodule Agent.Runner do
          verification
        ) do
     candidate =
-      Agent.Run.Builder.success(final_state)
+      BeamAgent.Run.Builder.success(final_state)
 
-    case Agent.Verifier.verify(
+    case BeamAgent.Verifier.verify(
            candidate,
            verification
          ) do
@@ -257,7 +257,7 @@ defmodule Agent.Runner do
         candidate
 
       {:error, reason} ->
-        Agent.Run.Builder.verification_failed(
+        BeamAgent.Run.Builder.verification_failed(
           final_state,
           reason
         )

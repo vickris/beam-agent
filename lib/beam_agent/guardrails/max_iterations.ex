@@ -1,4 +1,4 @@
-defmodule Agent.Guardrails.MaxIterations do
+defmodule BeamAgent.Guardrails.MaxIterations do
   @moduledoc """
   Guardrail for enforcing maximum iteration limits.
   """

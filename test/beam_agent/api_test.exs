@@ -1,9 +1,9 @@
-defmodule Agent.APITest do
+defmodule BeamAgent.APITest do
   use ExUnit.Case, async: true
 
   test "returns a verified successful run" do
     assert {:ok, run} =
-             Agent.API.run(
+             BeamAgent.API.run(
                "Hello",
                llm: {LLM.Mock, mode: :normal},
                verification: [required_tools: [:echo]]
@@ -19,7 +19,7 @@ defmodule Agent.APITest do
 
   test "stops a model that loops forever" do
     assert {:error, run} =
-             Agent.API.run(
+             BeamAgent.API.run(
                "Keep repeating",
                llm: {LLM.Mock, mode: :loop_forever},
                verification: [required_tools: [:echo]]
@@ -32,7 +32,7 @@ defmodule Agent.APITest do
 
   test "rejects an unknown tool" do
     assert {:error, run} =
-             Agent.API.run(
+             BeamAgent.API.run(
                "Run a tool",
                llm: {LLM.Mock, mode: :unknown_tool},
                verification: [required_tools: [:echo]]
@@ -44,7 +44,7 @@ defmodule Agent.APITest do
 
   test "returns a completed but unverified run" do
     assert {:error, run} =
-             Agent.API.run(
+             BeamAgent.API.run(
                "Complete the task",
                llm: {LLM.Mock, mode: :hallucinate_success},
                verification: [required_tools: [:echo]]
@@ -64,7 +64,7 @@ defmodule Agent.APITest do
 
   test "stops execution after the total time budget is exhausted" do
     assert {:error, run} =
-             Agent.API.run(
+             BeamAgent.API.run(
                "Keep repeating",
                llm: {
                  LLM.Mock,
@@ -85,7 +85,7 @@ defmodule Agent.APITest do
 
   test "a crashing tool only crashes its own runner" do
     assert {:error, run} =
-             Agent.API.run(
+             BeamAgent.API.run(
                "Crash",
                llm: {
                  LLM.Mock,
@@ -104,7 +104,7 @@ defmodule Agent.APITest do
            } = run.error
 
     assert {:ok, next_run} =
-             Agent.API.run(
+             BeamAgent.API.run(
                "Hello",
                llm: {
                  LLM.Mock,
@@ -123,7 +123,7 @@ defmodule Agent.APITest do
       System.monotonic_time(:millisecond)
 
     assert {:error, run} =
-             Agent.API.run(
+             BeamAgent.API.run(
                "Sleep forever",
                llm: {
                  LLM.Mock,
@@ -148,6 +148,9 @@ defmodule Agent.APITest do
 
     assert run.execution_status == :failed
 
-    assert elapsed < 1_000
+    # The hard timeout (max_execution_time_ms + the API's grace period) should
+    # terminate the runner well before the mock tool's 5_000ms sleep completes.
+    assert elapsed >= 1_050
+    assert elapsed < 2_000
   end
 end

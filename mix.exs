@@ -1,9 +1,9 @@
-defmodule DealAgent.MixProject do
+defmodule BeamAgent.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :deal_agent,
+      app: :beam_agent,
       version: "0.1.0",
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
@@ -15,7 +15,7 @@ defmodule DealAgent.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {DealAgent.Application, []}
+      mod: {BeamAgent.Application, []}
     ]
   end
 

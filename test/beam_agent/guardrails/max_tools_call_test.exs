@@ -1,8 +1,8 @@
-defmodule Agent.Guardrails.MaxToolsCallTest do
+defmodule BeamAgent.Guardrails.MaxToolsCallTest do
   use ExUnit.Case, async: true
 
-  alias Agent.Guardrails.MaxToolCalls
-  alias Agent.State
+  alias BeamAgent.Guardrails.MaxToolCalls
+  alias BeamAgent.State
 
   test "allows tool calls within the limit" do
     state =

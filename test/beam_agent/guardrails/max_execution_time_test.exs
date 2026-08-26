@@ -1,8 +1,8 @@
-defmodule Agent.Guardrails.MaxExecutionTimeTest do
+defmodule BeamAgent.Guardrails.MaxExecutionTimeTest do
   use ExUnit.Case, async: true
 
-  alias Agent.Guardrails.MaxExecutionTime
-  alias Agent.State
+  alias BeamAgent.Guardrails.MaxExecutionTime
+  alias BeamAgent.State
 
   test "rejects a run after its deadline" do
     state = State.new("goal")

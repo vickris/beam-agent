@@ -1,10 +1,10 @@
-defmodule Agent.Guardrails.MaxContextMessages do
+defmodule BeamAgent.Guardrails.MaxContextMessages do
   @moduledoc """
   Ensures that the final model-facing context is within its configured
   message limit.
   """
 
-  alias Agent.Context
+  alias BeamAgent.Context
 
   def check(state, opts) do
     maximum =

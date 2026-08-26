@@ -1,6 +1,6 @@
-# Deal-Agent
+# BeamAgent
 
-Agent framework that other developers can tap into when building their agents. I chose Elixir for this project because of the benefits BEAM comes with:
+A general-purpose Elixir agent harness — the LLM tool-use loop, guardrails, and verification other developers can build agents on top of (a shopping agent, a research agent, a coding agent, a workflow or internal-automation agent, etc.). I chose Elixir for this project because of the benefits BEAM comes with:
 
  - Isolated processes so each agent run is treated as an independent process and one agent crushing does not affect other agents.
  - Supervision, where we get automatic restarts in the case of unforseen failures.

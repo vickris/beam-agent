@@ -1,7 +1,7 @@
-defmodule Agent.ContextTest do
+defmodule BeamAgent.ContextTest do
   use ExUnit.Case, async: true
 
-  alias Agent.Context
+  alias BeamAgent.Context
 
   test "does not compress context within the limit" do
     context =
@@ -97,7 +97,7 @@ defmodule Agent.ContextTest do
 
   test "compresses context during a long run" do
     assert {:error, run} =
-             Agent.API.run(
+             BeamAgent.API.run(
                "Keep repeating",
                llm: {
                  LLM.Mock,

@@ -1,4 +1,4 @@
-defmodule Agent.Trace do
+defmodule BeamAgent.Trace do
   @moduledoc """
   Provides tracing functionality for the agent.
   """

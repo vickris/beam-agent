@@ -1,4 +1,4 @@
-defmodule Agent.State do
+defmodule BeamAgent.State do
   @moduledoc """
   Holds the runtime state for a single agent execution.
   """
@@ -21,7 +21,7 @@ defmodule Agent.State do
       status: :running,
       iteration: 0,
       tool_calls: 0,
-      context: Agent.Context.new(goal),
+      context: BeamAgent.Context.new(goal),
       trace: [],
       started_at: DateTime.utc_now(),
       started_at_monotonic: System.monotonic_time(:millisecond)
@@ -32,7 +32,7 @@ defmodule Agent.State do
     %{
       state
       | trace:
-          Agent.Trace.record(
+          BeamAgent.Trace.record(
             state.trace,
             state.iteration,
             type,
@@ -42,11 +42,11 @@ defmodule Agent.State do
   end
 
   def add_tool_result(state, result) do
-    update_context(state, &Agent.Context.add_tool_result(&1, result))
+    update_context(state, &BeamAgent.Context.add_tool_result(&1, result))
   end
 
   def add_assistant_message(state, reply) do
-    update_context(state, &Agent.Context.add_assistant_message(&1, reply))
+    update_context(state, &BeamAgent.Context.add_assistant_message(&1, reply))
   end
 
   def increment_iteration(state) do
@@ -79,7 +79,7 @@ defmodule Agent.State do
     %{state | context: fun.(state.context)}
   end
 
-  def put_context(state, %Agent.Context{} = context) do
+  def put_context(state, %BeamAgent.Context{} = context) do
     %{state | context: context}
   end
 end

@@ -1,4 +1,4 @@
-defmodule Agent.RunSupervisor do
+defmodule BeamAgent.RunSupervisor do
   @moduledoc """
   Dynamically supervises individual agent executions.
   """
@@ -17,7 +17,7 @@ defmodule Agent.RunSupervisor do
   def start_run(opts) do
     DynamicSupervisor.start_child(
       __MODULE__,
-      {Agent.Runner, opts}
+      {BeamAgent.Runner, opts}
     )
   end
 end
