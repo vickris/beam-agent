@@ -36,14 +36,22 @@ defmodule BeamAgent.MixProject do
 
   defp description do
     """
-    A reliable OTP-based agent harness for Elixir with tool execution,
-    guardrails, deterministic verification, context management,
-    programmatic handlers, tracing, and supervised agent runs.
+    A general-purpose, OTP-based agent harness for Elixir: an LLM tool-use
+    loop with an injectable tool registry, configurable guardrails,
+    pluggable post-run verification, deterministic context compression,
+    a full execution trace, and supervised, concurrent agent runs.
     """
   end
 
   defp package do
     [
+      files: [
+        "lib",
+        "mix.exs",
+        "README.md",
+        "LICENSE",
+        "CHANGELOG.md"
+      ],
       licenses: ["MIT"],
       links: %{
         "GitHub" => "https://github.com/vickris/beam-agent"
