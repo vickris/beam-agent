@@ -1,11 +1,14 @@
 defmodule BeamAgent.APITest do
   use ExUnit.Case, async: true
 
+  alias BeamAgent.Tools.{Crash, Echo, Sleep}
+
   test "returns a verified successful run" do
     assert {:ok, run} =
              BeamAgent.API.run(
                "Hello",
-               llm: {LLM.Mock, mode: :normal},
+               llm: {BeamAgent.LLM.Mock, mode: :normal},
+               tools: %{echo: Echo},
                verification: [required_tools: [:echo]]
              )
 
@@ -21,7 +24,8 @@ defmodule BeamAgent.APITest do
     assert {:error, run} =
              BeamAgent.API.run(
                "Keep repeating",
-               llm: {LLM.Mock, mode: :loop_forever},
+               llm: {BeamAgent.LLM.Mock, mode: :loop_forever},
+               tools: %{echo: Echo},
                verification: [required_tools: [:echo]]
              )
 
@@ -34,7 +38,7 @@ defmodule BeamAgent.APITest do
     assert {:error, run} =
              BeamAgent.API.run(
                "Run a tool",
-               llm: {LLM.Mock, mode: :unknown_tool},
+               llm: {BeamAgent.LLM.Mock, mode: :unknown_tool},
                verification: [required_tools: [:echo]]
              )
 
@@ -46,7 +50,7 @@ defmodule BeamAgent.APITest do
     assert {:error, run} =
              BeamAgent.API.run(
                "Complete the task",
-               llm: {LLM.Mock, mode: :hallucinate_success},
+               llm: {BeamAgent.LLM.Mock, mode: :hallucinate_success},
                verification: [required_tools: [:echo]]
              )
 
@@ -67,12 +71,13 @@ defmodule BeamAgent.APITest do
              BeamAgent.API.run(
                "Keep repeating",
                llm: {
-                 LLM.Mock,
+                 BeamAgent.LLM.Mock,
                  [
                    mode: :slow_loop,
                    sleep_ms: 100
                  ]
                },
+               tools: %{sleep: Sleep},
                guardrails: [
                  max_execution_time_ms: 250
                ]
@@ -88,9 +93,10 @@ defmodule BeamAgent.APITest do
              BeamAgent.API.run(
                "Crash",
                llm: {
-                 LLM.Mock,
+                 BeamAgent.LLM.Mock,
                  mode: :crash_tool
                },
+               tools: %{crash: Crash},
                guardrails: [
                  max_execution_time_ms: 1_000
                ]
@@ -107,9 +113,10 @@ defmodule BeamAgent.APITest do
              BeamAgent.API.run(
                "Hello",
                llm: {
-                 LLM.Mock,
+                 BeamAgent.LLM.Mock,
                  mode: :normal
                },
+               tools: %{echo: Echo},
                verification: [
                  required_tools: [:echo]
                ]
@@ -126,12 +133,13 @@ defmodule BeamAgent.APITest do
              BeamAgent.API.run(
                "Sleep forever",
                llm: {
-                 LLM.Mock,
+                 BeamAgent.LLM.Mock,
                  [
                    mode: :slow_loop,
                    sleep_ms: 5_000
                  ]
                },
+               tools: %{sleep: Sleep},
                guardrails: [
                  max_execution_time_ms: 50,
                  max_iterations: 100,

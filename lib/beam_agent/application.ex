@@ -8,7 +8,6 @@ defmodule BeamAgent.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Starts a worker by calling: BeamAgent.Worker.start_link(arg)
       BeamAgent.RunSupervisor
     ]
 

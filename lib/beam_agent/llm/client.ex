@@ -1,4 +1,4 @@
-defmodule LLM.Client do
+defmodule BeamAgent.LLM.Client do
   @moduledoc """
   Behaviour implemented by every LLM provider.
   """

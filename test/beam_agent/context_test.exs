@@ -2,6 +2,7 @@ defmodule BeamAgent.ContextTest do
   use ExUnit.Case, async: true
 
   alias BeamAgent.Context
+  alias BeamAgent.Tools.Echo
 
   test "does not compress context within the limit" do
     context =
@@ -100,9 +101,10 @@ defmodule BeamAgent.ContextTest do
              BeamAgent.API.run(
                "Keep repeating",
                llm: {
-                 LLM.Mock,
+                 BeamAgent.LLM.Mock,
                  mode: :loop_forever
                },
+               tools: %{echo: Echo},
                guardrails: [
                  max_iterations: 6,
                  max_context_messages: 4,

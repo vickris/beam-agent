@@ -1,9 +1,9 @@
-defmodule LLM.Mock do
+defmodule BeamAgent.LLM.Mock do
   @moduledoc """
   Deterministic LLM implementation used to exercise the agent harness.
   """
 
-  @behaviour LLM.Client
+  @behaviour BeamAgent.LLM.Client
 
   @impl true
   def chat(messages, opts) do

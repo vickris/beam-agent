@@ -1,14 +1,39 @@
 defmodule BeamAgent.Runner do
   @moduledoc """
-  Executes one isolated agent run
+  Executes one isolated agent run.
+
+  Each run is its own `GenServer`, started anonymously (no name
+  registration) by `BeamAgent.RunSupervisor`, so many runs can be in flight
+  concurrently and one crashing has no effect on the others — the crash is
+  contained to this process and surfaces to the caller of
+  `BeamAgent.API.run/2` as a `{:runner_crashed, reason}` error, not a
+  propagating exit.
+
+  `start_link/1` accepts:
+
+    * `:goal` (required) — the natural-language goal for the run.
+    * `:llm` (required) — `{module, opts}`, where `module` implements
+      `BeamAgent.LLM.Client`.
+    * `:tools` — `%{atom() => module}` of tools available to this run, each
+      module implementing `BeamAgent.Tools.Behaviour`. Defaults to `%{}`.
+    * `:guardrails` — options consumed by `BeamAgent.Guardrails`.
+    * `:verification` — options consumed by `BeamAgent.Verifier`.
+
+  Call `run/2` to kick off execution; the result arrives as
+  `{:agent_run_finished, pid, result}` sent to the given caller, after which
+  this process stops normally.
   """
 
   use GenServer
 
   alias BeamAgent.Context
-  alias BeamAgent.State
   alias BeamAgent.Guardrails
+  alias BeamAgent.State
+  alias BeamAgent.Tools
 
+  @type tools :: Tools.Registry.tools()
+
+  @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
     GenServer.start_link(
       __MODULE__,
@@ -23,6 +48,7 @@ defmodule BeamAgent.Runner do
 
     state = %{
       llm: llm,
+      tools: Keyword.get(opts, :tools, %{}),
       verification: Keyword.get(opts, :verification, []),
       guardrails: Keyword.get(opts, :guardrails, []),
       execution: State.new(goal)
@@ -31,6 +57,11 @@ defmodule BeamAgent.Runner do
     {:ok, state}
   end
 
+  @doc """
+  Starts execution of `pid`'s run; the result is sent to `caller` as
+  `{:agent_run_finished, pid, result}`.
+  """
+  @spec run(pid(), pid()) :: :ok
   def run(pid, caller) do
     GenServer.cast(
       pid,
@@ -44,6 +75,7 @@ defmodule BeamAgent.Runner do
         %{
           execution: execution,
           llm: llm,
+          tools: tools,
           guardrails: guardrails,
           verification: verification
         } = state
@@ -52,6 +84,7 @@ defmodule BeamAgent.Runner do
       execute(
         execution,
         llm,
+        tools,
         guardrails,
         verification
       )
@@ -61,17 +94,17 @@ defmodule BeamAgent.Runner do
     {:stop, :normal, state}
   end
 
-  defp step(state, llm, guardrails) do
+  defp step(state, llm, tools, guardrails) do
     case prepare_context(state, guardrails) do
       {:ok, state} ->
-        run_checks(state, llm, guardrails)
+        run_checks(state, llm, tools, guardrails)
 
       {:error, reason, failed_state} ->
         {:error, reason, failed_state}
     end
   end
 
-  defp run_checks(state, llm, guardrails) do
+  defp run_checks(state, llm, tools, guardrails) do
     with :ok <- Guardrails.check_before_step(state, guardrails),
          {:ok, _} <- prepare_context(state, guardrails),
          :ok <- Guardrails.check_context(state, guardrails) do
@@ -81,7 +114,7 @@ defmodule BeamAgent.Runner do
         message_count: state.context |> Context.messages() |> length(),
         elapsed_ms: State.elapsed_ms(state)
       })
-      |> call_llm(llm, guardrails)
+      |> call_llm(llm, tools, guardrails)
     else
       {:error, reason, %State{} = failed_state} ->
         {:error, reason, failed_state}
@@ -92,7 +125,7 @@ defmodule BeamAgent.Runner do
     end
   end
 
-  defp call_llm(state, {module, opts} = llm, guardrails) do
+  defp call_llm(state, {module, opts} = llm, tools, guardrails) do
     case module.chat(Context.messages(state.context), opts) do
       {:reply, reply} ->
         state =
@@ -105,7 +138,7 @@ defmodule BeamAgent.Runner do
 
       {:tool_call, tool, args} ->
         state = State.trace(state, :tool_requested, %{tool: tool, arguments: args})
-        run_tool(state, tool, args, llm, guardrails)
+        run_tool(state, tool, args, llm, tools, guardrails)
     end
   end
 
@@ -129,7 +162,7 @@ defmodule BeamAgent.Runner do
       summary_char_limit: summary_char_limit
     ]
 
-    case BeamAgent.Context.compress(
+    case Context.compress(
            state.context,
            options
          ) do
@@ -153,9 +186,9 @@ defmodule BeamAgent.Runner do
     end
   end
 
-  defp run_tool(state, tool, args, llm, guardrails) do
+  defp run_tool(state, tool, args, llm, tools, guardrails) do
     with :ok <- Guardrails.check_before_tool(state, guardrails) do
-      execute_tool(state, tool, args, llm, guardrails)
+      execute_tool(state, tool, args, llm, tools, guardrails)
     else
       {:error, reason} ->
         failed_state = State.fail(state, reason)
@@ -163,7 +196,7 @@ defmodule BeamAgent.Runner do
     end
   end
 
-  defp execute_tool(state, tool, args, llm, guardrails) do
+  defp execute_tool(state, tool, args, llm, tools, guardrails) do
     state =
       state
       |> State.increment_tool_calls()
@@ -179,7 +212,7 @@ defmodule BeamAgent.Runner do
         }
       )
 
-    case Tools.Registry.call(tool, args) do
+    case Tools.Registry.call(tools, tool, args) do
       {:ok, result} ->
         state =
           state
@@ -190,7 +223,7 @@ defmodule BeamAgent.Runner do
           })
           |> State.add_tool_result(result)
 
-        step(state, llm, guardrails)
+        step(state, llm, tools, guardrails)
 
       {:error, reason} ->
         failed_state =
@@ -222,12 +255,14 @@ defmodule BeamAgent.Runner do
   defp execute(
          execution,
          llm,
+         tools,
          guardrails,
          verification
        ) do
     case step(
            execution,
            llm,
+           tools,
            guardrails
          ) do
       {:ok, _result, final_state} ->
@@ -264,6 +299,8 @@ defmodule BeamAgent.Runner do
     end
   end
 
+  @doc false
+  @spec child_spec(keyword()) :: Supervisor.child_spec()
   def child_spec(opts) do
     %{
       id: make_ref(),

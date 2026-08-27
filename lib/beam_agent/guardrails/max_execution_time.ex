@@ -5,6 +5,11 @@ defmodule BeamAgent.Guardrails.MaxExecutionTime do
 
   alias BeamAgent.State
 
+  @doc """
+  Checks that wall-clock elapsed time is within `opts[:max_execution_time_ms]`
+  (default 30_000).
+  """
+  @spec check(State.t(), keyword()) :: :ok | {:error, {:max_execution_time_reached, map()}}
   def check(%State{} = state, opts) do
     max_execution_time_ms = Keyword.get(opts, :max_execution_time_ms, 30_000)
 

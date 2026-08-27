@@ -4,8 +4,9 @@ defmodule BeamAgent.Guardrails.MaxIterations do
   """
 
   @doc """
-  Check if iteration count exceeds maximum allowed iterations.
+  Checks if iteration count exceeds `opts[:max_iterations]` (default 5).
   """
+  @spec check(BeamAgent.State.t(), keyword()) :: :ok | {:error, :max_iterations_reached}
   def check(state, opts) do
     maximum =
       Keyword.get(

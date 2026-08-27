@@ -1,4 +1,4 @@
-defmodule Llm.Config do
+defmodule BeamAgent.LLM.Config do
   @moduledoc """
   Configuration for the LLM client.
   """

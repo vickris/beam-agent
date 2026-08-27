@@ -1,4 +1,4 @@
-defmodule Tools.Behaviour do
+defmodule BeamAgent.Tools.Behaviour do
   @moduledoc """
   Behaviour implemented by every tool the agent can execute.
   """

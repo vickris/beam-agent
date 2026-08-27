@@ -9,6 +9,23 @@ defmodule BeamAgent.Context do
   @default_summary_char_limit 1_000
   @summary_line_limit 200
 
+  @type message :: %{role: atom(), content: term()}
+
+  @type t :: %__MODULE__{
+          goal: String.t(),
+          system_prompt: String.t() | nil,
+          summary: String.t() | nil,
+          messages: [message()]
+        }
+
+  @type compression_metadata :: %{
+          :compressed? => boolean(),
+          :before_count => non_neg_integer(),
+          :after_count => non_neg_integer(),
+          :compressed_messages => non_neg_integer(),
+          optional(:summary_chars) => non_neg_integer()
+        }
+
   defstruct [
     :goal,
     :system_prompt,
@@ -16,6 +33,8 @@ defmodule BeamAgent.Context do
     messages: []
   ]
 
+  @doc "Starts a fresh context for `goal`, optionally with a `:system_prompt`."
+  @spec new(String.t(), keyword()) :: t()
   def new(goal, opts \\ []) when is_binary(goal) do
     %__MODULE__{
       goal: goal,
@@ -25,6 +44,12 @@ defmodule BeamAgent.Context do
     }
   end
 
+  @doc """
+  Renders `context` into the ordered list of messages sent to the model:
+  optional system prompt, the goal as a user message, the compressed-history
+  summary (if any) as a system message, then the accumulated messages.
+  """
+  @spec messages(t()) :: [message()]
   def messages(%__MODULE__{} = context) do
     []
     |> maybe_add_system_prompt(context.system_prompt)
@@ -33,18 +58,36 @@ defmodule BeamAgent.Context do
     |> Kernel.++(context.messages)
   end
 
+  @doc "Appends a user message."
+  @spec add_user_message(t(), term()) :: t()
   def add_user_message(%__MODULE__{} = context, content) do
     append(context, :user, content)
   end
 
+  @doc "Appends an assistant reply."
+  @spec add_assistant_message(t(), term()) :: t()
   def add_assistant_message(%__MODULE__{} = context, content) do
     append(context, :assistant, content)
   end
 
+  @doc "Appends a tool result."
+  @spec add_tool_result(t(), term()) :: t()
   def add_tool_result(%__MODULE__{} = context, result) do
     append(context, :tool, result)
   end
 
+  @doc """
+  Deterministically compresses `context` if its rendered message count
+  exceeds `opts[:max_messages]` (required): the oldest messages are folded
+  into `context.summary` (capped at `opts[:summary_char_limit]`, default
+  #{@default_summary_char_limit}) and dropped from `messages`. Returns
+  `{:ok, context, metadata}` (unchanged if under the limit, with
+  `metadata.compressed? == false`), or `{:error, {:context_limit_too_small, %{...}}}`
+  if `:max_messages` is too small to hold the goal + optional system prompt +
+  at least one summary/message slot.
+  """
+  @spec compress(t(), keyword()) ::
+          {:ok, t(), compression_metadata()} | {:error, {:context_limit_too_small, map()}}
   def compress(%__MODULE__{} = context, opts) do
     max_messages = Keyword.fetch!(opts, :max_messages)
 

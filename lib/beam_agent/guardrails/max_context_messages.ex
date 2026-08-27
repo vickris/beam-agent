@@ -5,7 +5,14 @@ defmodule BeamAgent.Guardrails.MaxContextMessages do
   """
 
   alias BeamAgent.Context
+  alias BeamAgent.State
 
+  @doc """
+  Checks that the rendered message count is within `opts[:max_context_messages]`
+  (default 8).
+  """
+  @spec check(State.t(), keyword()) ::
+          :ok | {:error, {:max_context_messages_exceeded, map()}}
   def check(state, opts) do
     maximum =
       Keyword.get(
