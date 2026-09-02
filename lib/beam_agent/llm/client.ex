@@ -8,9 +8,15 @@ defmodule BeamAgent.LLM.Client do
           content: String.t()
         }
 
+  @type tool_call :: %{
+          id: String.t(),
+          name: atom(),
+          arguments: map()
+        }
+
   @type response ::
           {:reply, String.t()}
-          | {:tool_call, atom(), map()}
+          | {:tool_call, tool_call()}
 
   @callback chat([message()], keyword()) :: response()
 end

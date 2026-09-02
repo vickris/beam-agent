@@ -136,9 +136,15 @@ defmodule BeamAgent.Runner do
 
         {:ok, reply, state}
 
-      {:tool_call, tool, args} ->
-        state = State.trace(state, :tool_requested, %{tool: tool, arguments: args})
-        run_tool(state, tool, args, llm, tools, guardrails)
+      {:tool_call, %{id: id, name: tool, arguments: args}} ->
+        state =
+          State.trace(state, :tool_requested, %{
+            tool_call_id: id,
+            tool: tool,
+            arguments: args
+          })
+
+        run_tool(state, id, tool, args, llm, tools, guardrails)
     end
   end
 
@@ -186,9 +192,9 @@ defmodule BeamAgent.Runner do
     end
   end
 
-  defp run_tool(state, tool, args, llm, tools, guardrails) do
+  defp run_tool(state, tool_call_id, tool, args, llm, tools, guardrails) do
     with :ok <- Guardrails.check_before_tool(state, guardrails) do
-      execute_tool(state, tool, args, llm, tools, guardrails)
+      execute_tool(state, tool_call_id, tool, args, llm, tools, guardrails)
     else
       {:error, reason} ->
         failed_state = State.fail(state, reason)
@@ -196,7 +202,7 @@ defmodule BeamAgent.Runner do
     end
   end
 
-  defp execute_tool(state, tool, args, llm, tools, guardrails) do
+  defp execute_tool(state, tool_call_id, tool, args, llm, tools, guardrails) do
     state =
       state
       |> State.increment_tool_calls()
@@ -206,6 +212,7 @@ defmodule BeamAgent.Runner do
         state,
         :tool_started,
         %{
+          tool_call_id: tool_call_id,
           tool: tool,
           arguments: args,
           tool_call_number: state.tool_calls + 1
@@ -217,6 +224,7 @@ defmodule BeamAgent.Runner do
         state =
           state
           |> State.trace(:tool_completed, %{
+            tool_call_id: tool_call_id,
             tool: tool,
             result: result,
             tool_call_number: state.tool_calls
@@ -229,6 +237,7 @@ defmodule BeamAgent.Runner do
         failed_state =
           state
           |> State.trace(:tool_failed, %{
+            tool_call_id: tool_call_id,
             tool: tool,
             reason: reason,
             tool_call_number: state.tool_calls

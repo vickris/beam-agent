@@ -26,11 +26,23 @@ defmodule BeamAgent.LLM.Mock do
         unknown_tool()
 
       :crash_tool ->
-        {:tool_call, :crash, %{}}
+        tool_call(:crash, %{})
 
       mode ->
         raise ArgumentError, "unsupported mock LLM mode: #{inspect(mode)}"
     end
+  end
+
+  # A real provider returns a stable identifier for each tool call so the
+  # follow-up tool result can be correlated back to it; the mock just
+  # generates a unique one.
+  defp tool_call(name, arguments) do
+    {:tool_call,
+     %{
+       id: "mock-call-" <> Integer.to_string(System.unique_integer([:positive])),
+       name: name,
+       arguments: arguments
+     }}
   end
 
   defp slow_loop(_messages, opts) do
@@ -41,13 +53,13 @@ defmodule BeamAgent.LLM.Mock do
         20
       )
 
-    {:tool_call, :sleep, %{milliseconds: milliseconds}}
+    tool_call(:sleep, %{milliseconds: milliseconds})
   end
 
   defp normal(messages) do
     case List.last(messages) do
       %{role: :user, content: content} ->
-        {:tool_call, :echo, %{text: content}}
+        tool_call(:echo, %{text: content})
 
       %{role: :tool} ->
         {:reply, "Done!"}
@@ -64,7 +76,7 @@ defmodule BeamAgent.LLM.Mock do
         _message -> "Repeat"
       end
 
-    {:tool_call, :echo, %{text: text}}
+    tool_call(:echo, %{text: text})
   end
 
   defp hallucinate_success() do
@@ -72,6 +84,6 @@ defmodule BeamAgent.LLM.Mock do
   end
 
   defp unknown_tool() do
-    {:tool_call, :delete_everything, %{}}
+    tool_call(:delete_everything, %{})
   end
 end
