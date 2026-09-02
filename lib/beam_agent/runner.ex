@@ -136,15 +136,17 @@ defmodule BeamAgent.Runner do
 
         {:ok, reply, state}
 
-      {:tool_call, %{id: id, name: tool, arguments: args}} ->
+      {:tool_call, tool_call} ->
         state =
-          State.trace(state, :tool_requested, %{
-            tool_call_id: id,
-            tool: tool,
-            arguments: args
+          state
+          |> State.add_tool_call(tool_call)
+          |> State.trace(:tool_requested, %{
+            tool_call_id: tool_call.id,
+            tool: tool_call.name,
+            arguments: tool_call.arguments
           })
 
-        run_tool(state, id, tool, args, llm, tools, guardrails)
+        run_tool(state, tool_call, llm, tools, guardrails)
     end
   end
 
@@ -192,9 +194,9 @@ defmodule BeamAgent.Runner do
     end
   end
 
-  defp run_tool(state, tool_call_id, tool, args, llm, tools, guardrails) do
+  defp run_tool(state, tool_call, llm, tools, guardrails) do
     with :ok <- Guardrails.check_before_tool(state, guardrails) do
-      execute_tool(state, tool_call_id, tool, args, llm, tools, guardrails)
+      execute_tool(state, tool_call, llm, tools, guardrails)
     else
       {:error, reason} ->
         failed_state = State.fail(state, reason)
@@ -202,7 +204,13 @@ defmodule BeamAgent.Runner do
     end
   end
 
-  defp execute_tool(state, tool_call_id, tool, args, llm, tools, guardrails) do
+  defp execute_tool(
+         state,
+         %{id: tool_call_id, name: tool, arguments: args},
+         llm,
+         tools,
+         guardrails
+       ) do
     state =
       state
       |> State.increment_tool_calls()
@@ -229,7 +237,7 @@ defmodule BeamAgent.Runner do
             result: result,
             tool_call_number: state.tool_calls
           })
-          |> State.add_tool_result(result)
+          |> State.add_tool_result(tool_call_id, result)
 
         step(state, llm, tools, guardrails)
 

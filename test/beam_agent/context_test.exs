@@ -4,10 +4,26 @@ defmodule BeamAgent.ContextTest do
   alias BeamAgent.Context
   alias BeamAgent.Tools.Echo
 
+  test "pairs a tool call with its result by call id" do
+    tool_call = %{id: "call-42", name: :echo, arguments: %{text: "hi"}}
+
+    messages =
+      Context.new("Do the thing")
+      |> Context.add_tool_call(tool_call)
+      |> Context.add_tool_result(tool_call.id, "hi")
+      |> Context.messages()
+
+    assert [
+             %{role: :user, content: "Do the thing"},
+             %{role: :assistant, type: :tool_call, call_id: "call-42", name: :echo},
+             %{role: :tool, type: :tool_result, call_id: "call-42", content: "hi"}
+           ] = messages
+  end
+
   test "does not compress context within the limit" do
     context =
       Context.new("Complete the task")
-      |> Context.add_tool_result("first result")
+      |> Context.add_tool_result("call-1", "first result")
 
     assert {:ok, unchanged, metadata} =
              Context.compress(
@@ -22,10 +38,10 @@ defmodule BeamAgent.ContextTest do
   test "preserves the goal and recent messages" do
     context =
       Context.new("Find the cheapest store")
-      |> Context.add_tool_result("result one")
-      |> Context.add_tool_result("result two")
-      |> Context.add_tool_result("result three")
-      |> Context.add_tool_result("result four")
+      |> Context.add_tool_result("call-1", "result one")
+      |> Context.add_tool_result("call-2", "result two")
+      |> Context.add_tool_result("call-3", "result three")
+      |> Context.add_tool_result("call-4", "result four")
 
     assert {:ok, compressed, metadata} =
              Context.compress(
@@ -53,10 +69,10 @@ defmodule BeamAgent.ContextTest do
   test "keeps context bounded after repeated compression" do
     context =
       Context.new("Keep working")
-      |> Context.add_tool_result("one")
-      |> Context.add_tool_result("two")
-      |> Context.add_tool_result("three")
-      |> Context.add_tool_result("four")
+      |> Context.add_tool_result("call-1", "one")
+      |> Context.add_tool_result("call-2", "two")
+      |> Context.add_tool_result("call-3", "three")
+      |> Context.add_tool_result("call-4", "four")
 
     assert {:ok, context, _metadata} =
              Context.compress(
@@ -67,6 +83,7 @@ defmodule BeamAgent.ContextTest do
     context =
       Context.add_tool_result(
         context,
+        "call-5",
         "five"
       )
 
@@ -84,8 +101,8 @@ defmodule BeamAgent.ContextTest do
   test "rejects an unusably small limit" do
     context =
       Context.new("Complete the task")
-      |> Context.add_tool_result("result one")
-      |> Context.add_tool_result("result two")
+      |> Context.add_tool_result("call-1", "result one")
+      |> Context.add_tool_result("call-2", "result two")
 
     assert {:error, {:context_limit_too_small, details}} =
              Context.compress(

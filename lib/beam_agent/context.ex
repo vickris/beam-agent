@@ -9,7 +9,14 @@ defmodule BeamAgent.Context do
   @default_summary_char_limit 1_000
   @summary_line_limit 200
 
-  @type message :: %{role: atom(), content: term()}
+  @type message :: %{
+          :role => atom(),
+          optional(:content) => term(),
+          optional(:type) => :tool_call | :tool_result,
+          optional(:call_id) => String.t(),
+          optional(:name) => atom(),
+          optional(:arguments) => map()
+        }
 
   @type t :: %__MODULE__{
           goal: String.t(),
@@ -47,7 +54,9 @@ defmodule BeamAgent.Context do
   @doc """
   Renders `context` into the ordered list of messages sent to the model:
   optional system prompt, the goal as a user message, the compressed-history
-  summary (if any) as a system message, then the accumulated messages.
+  summary (if any) as a system message, then the accumulated messages
+  (assistant replies, and tool-call/tool-result pairs correlated by
+  `call_id`).
   """
   @spec messages(t()) :: [message()]
   def messages(%__MODULE__{} = context) do
@@ -56,6 +65,25 @@ defmodule BeamAgent.Context do
     |> Kernel.++([message(:user, context.goal)])
     |> maybe_add_summary(context.summary)
     |> Kernel.++(context.messages)
+  end
+
+  @doc """
+  Appends the assistant's tool-call message.
+
+  A real provider first emits a message announcing *which* tool call it
+  wants (identified by `tool_call.id`); the matching `add_tool_result/3`
+  then carries the same id so the provider can correlate the result back
+  to the request.
+  """
+  @spec add_tool_call(t(), BeamAgent.LLM.Client.tool_call()) :: t()
+  def add_tool_call(%__MODULE__{} = context, tool_call) do
+    append(context, %{
+      role: :assistant,
+      type: :tool_call,
+      call_id: tool_call.id,
+      name: tool_call.name,
+      arguments: tool_call.arguments
+    })
   end
 
   @doc "Appends a user message."
@@ -70,10 +98,18 @@ defmodule BeamAgent.Context do
     append(context, :assistant, content)
   end
 
-  @doc "Appends a tool result."
-  @spec add_tool_result(t(), term()) :: t()
-  def add_tool_result(%__MODULE__{} = context, result) do
-    append(context, :tool, result)
+  @doc """
+  Appends a tool result, tagged with the `call_id` of the tool call it
+  answers (see `add_tool_call/2`).
+  """
+  @spec add_tool_result(t(), String.t(), term()) :: t()
+  def add_tool_result(%__MODULE__{} = context, call_id, result) do
+    append(context, %{
+      role: :tool,
+      type: :tool_result,
+      call_id: call_id,
+      content: normalize_content(result)
+    })
   end
 
   @doc """
@@ -186,11 +222,13 @@ defmodule BeamAgent.Context do
   end
 
   defp append(context, role, content) do
-    new_message = message(role, normalize_content(content))
+    append(context, message(role, normalize_content(content)))
+  end
 
+  defp append(context, %{role: _} = message) do
     %{
       context
-      | messages: context.messages ++ [new_message]
+      | messages: context.messages ++ [message]
     }
   end
 
@@ -212,6 +250,10 @@ defmodule BeamAgent.Context do
     |> Enum.reject(&blank?/1)
     |> Enum.join("\n")
     |> limit_summary(char_limit)
+  end
+
+  defp summarize_message(%{type: :tool_call, name: name, arguments: arguments}) do
+    "assistant: called #{name}(#{truncate(normalize_content(arguments), @summary_line_limit)})"
   end
 
   defp summarize_message(message) do

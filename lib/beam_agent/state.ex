@@ -63,10 +63,16 @@ defmodule BeamAgent.State do
     }
   end
 
-  @doc "Appends a tool result to the run's context."
-  @spec add_tool_result(t(), term()) :: t()
-  def add_tool_result(state, result) do
-    update_context(state, &BeamAgent.Context.add_tool_result(&1, result))
+  @doc "Appends the assistant's tool-call message to the run's context."
+  @spec add_tool_call(t(), BeamAgent.LLM.Client.tool_call()) :: t()
+  def add_tool_call(state, tool_call) do
+    update_context(state, &BeamAgent.Context.add_tool_call(&1, tool_call))
+  end
+
+  @doc "Appends a tool result to the run's context, tagged with its `call_id`."
+  @spec add_tool_result(t(), String.t(), term()) :: t()
+  def add_tool_result(state, call_id, result) do
+    update_context(state, &BeamAgent.Context.add_tool_result(&1, call_id, result))
   end
 
   @doc "Appends an assistant reply to the run's context."
