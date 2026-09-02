@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-09-02
+
+### Changed
+
+- `BeamAgent.LLM.Client` tool calls now carry a provider-supplied `id`:
+  the `chat/2` callback returns `{:tool_call, %{id: String.t(), name:
+  atom(), arguments: map()}}` so a tool result can be correlated back to
+  the exact call that requested it (matches real provider APIs).
+- `BeamAgent.Runner` now records **two** context messages per tool round —
+  the assistant's `type: :tool_call` message (via
+  `BeamAgent.Context.add_tool_call/2`) before the tool runs, then the
+  `type: :tool_result` message tagged with the same `call_id`. The
+  `:tool_requested` / `:tool_started` / `:tool_completed` / `:tool_failed`
+  trace steps carry that id as `tool_call_id`.
+- `BeamAgent.Context.add_tool_result/2` is now `add_tool_result/3`, taking
+  the answering call's `call_id` as its second argument.
+
 ## [0.1.0] - 2026-08-27
 
 Initial release.
