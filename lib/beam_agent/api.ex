@@ -73,7 +73,10 @@ defmodule BeamAgent.API do
       |> Keyword.get(:guardrails, [])
       |> Keyword.get(:max_execution_time_ms, 30_000)
 
-    opts = Keyword.put(opts, :goal, goal)
+    opts =
+      opts
+      |> Keyword.put(:goal, goal)
+      |> Keyword.put(:run_id, make_ref())
 
     with {:ok, pid} <-
            RunSupervisor.start_run(opts) do

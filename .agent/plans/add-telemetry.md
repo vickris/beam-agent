@@ -106,6 +106,11 @@ users.
 
 ## Progress
 
+- [x] Implement Milestone 1: telemetry foundation and internal run correlation.
+- [x] Validate Milestone 1 formatting and tests: `mix format --check-formatted`
+  passed; `mix test` passed with 29 tests, including 8 new infrastructure tests.
+- [ ] Complete Milestone 1 validation with `mix precommit`: attempted, but Mix
+  reports that the task could not be found. The required guardrail remains blocked.
 - [ ] Design telemetry event contract
 - [ ] Instrument run lifecycle
 - [ ] Instrument model calls
@@ -148,6 +153,57 @@ runs to be distinguished without prematurely designing the future run registry.
 
 Future work may introduce a durable/public run identifier as part of
 Registry-based run lookup or persistent execution storage.
+
+### Milestone 1 foundation boundary
+
+Decision:
+
+Add the standard `:telemetry` runtime dependency and an internal
+`BeamAgent.Telemetry.execute/3` emission boundary. No runtime instrumentation
+or span helper is introduced in this milestone.
+
+The initial metadata allowlist contains only `:run_id` and
+`:telemetry_span_context`, both restricted to references. Measurements are
+restricted to integer `:system_time`, `:monotonic_time`, `:duration`, and
+`:count` values. Unknown keys and invalid values are omitted. Future fields
+must be added with their event contracts instead of forwarding arbitrary maps.
+
+Reason:
+
+Key filtering alone could leak execution content hidden under an allowed key.
+Value checks provide a small, explicit boundary without prematurely defining
+later instrumentation. Handlers are optional; the interoperable dependency is
+always available. A custom event bus or monitoring process is unnecessary.
+
+### Carry correlation through existing startup options
+
+Decision:
+
+`API.run/2` generates a fresh reference before `RunSupervisor.start_run/1`,
+overriding any supplied `:run_id`. The existing options path carries it to
+`Runner.init/1`, which retains it in the private GenServer state. Direct
+`Runner.start_link/1` calls generate a fallback reference before process startup
+when the internal option is absent. The public `Run` struct is unchanged.
+
+Reason:
+
+This preserves existing direct startup calls and requires no supervisor changes,
+registry, process dictionary, or new public configuration. Tests observe the
+startup boundary with scoped Erlang call tracing and inspect idle runner state;
+production test hooks and runtime telemetry events are not needed.
+
+### Preserve the existing validation configuration
+
+Decision:
+
+Record the missing `mix precommit` task as a validation blocker rather than
+adding an alias or substituting a different command in this milestone.
+
+Reason:
+
+The task is required by the plan but is not defined by the repository. Defining
+its checks is separate from telemetry foundation work; formatting and the full
+test suite passed, but they do not establish that this missing guardrail passed.
 
 ## Open questions
 

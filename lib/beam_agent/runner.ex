@@ -35,6 +35,9 @@ defmodule BeamAgent.Runner do
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
+    # Direct starts also get correlation identity before the process is created.
+    opts = Keyword.put_new_lazy(opts, :run_id, &make_ref/0)
+
     GenServer.start_link(
       __MODULE__,
       opts
@@ -47,6 +50,7 @@ defmodule BeamAgent.Runner do
     llm = Keyword.fetch!(opts, :llm)
 
     state = %{
+      run_id: Keyword.fetch!(opts, :run_id),
       llm: llm,
       tools: Keyword.get(opts, :tools, %{}),
       verification: Keyword.get(opts, :verification, []),

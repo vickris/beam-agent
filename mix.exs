@@ -15,7 +15,8 @@ defmodule BeamAgent.MixProject do
       docs: [
         main: "readme",
         extras: ["README.md"]
-      ]
+      ],
+      aliases: aliases()
     ]
   end
 
@@ -30,6 +31,7 @@ defmodule BeamAgent.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:telemetry, "~> 1.0"},
       {:ex_doc, "~> 0.40", only: :dev, runtime: false}
     ]
   end
@@ -56,6 +58,16 @@ defmodule BeamAgent.MixProject do
       links: %{
         "GitHub" => "https://github.com/vickris/beam-agent"
       }
+    ]
+  end
+
+  defp aliases do
+    [
+      precommit: [
+        "format --check-formatted",
+        "compile --warnings-as-errors",
+        "test"
+      ]
     ]
   end
 end
