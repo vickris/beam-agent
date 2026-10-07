@@ -26,7 +26,8 @@ defmodule BeamAgent.TelemetryTest do
       run: BeamAgent.Run.timeout(secret, 1),
       reason: RuntimeError.exception(secret),
       stacktrace: [{__MODULE__, :example, [secret], []}],
-      future_field: secret
+      future_field: secret,
+      unknown_reference: make_ref()
     }
 
     assert :ok =

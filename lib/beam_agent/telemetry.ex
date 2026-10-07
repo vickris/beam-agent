@@ -3,7 +3,6 @@ defmodule BeamAgent.Telemetry do
 
   # Internal emission boundary. Extend these allowlists only alongside a
   # documented event contract; never forward execution payloads or options.
-  @metadata_keys [:run_id, :telemetry_span_context]
   @measurement_keys [:system_time, :monotonic_time, :duration, :count]
 
   @doc """
@@ -21,9 +20,13 @@ defmodule BeamAgent.Telemetry do
     :telemetry.execute(
       [:beam_agent | event],
       allow(measurements, @measurement_keys, &is_integer/1),
-      allow(metadata, @metadata_keys, &is_reference/1)
+      Map.filter(metadata, &valid_metadata?/1)
     )
   end
+
+  defp valid_metadata?({:run_id, value}), do: is_reference(value)
+  defp valid_metadata?({:telemetry_span_context, value}), do: is_reference(value)
+  defp valid_metadata?(_field), do: false
 
   defp allow(values, keys, valid?) do
     values

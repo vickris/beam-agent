@@ -16,7 +16,7 @@ defmodule BeamAgent.MixProject do
         main: "readme",
         extras: ["README.md"]
       ],
-      aliases: aliases()
+      
     ]
   end
 

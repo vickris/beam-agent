@@ -108,9 +108,9 @@ users.
 
 - [x] Implement Milestone 1: telemetry foundation and internal run correlation.
 - [x] Validate Milestone 1 formatting and tests: `mix format --check-formatted`
-  passed; `mix test` passed with 29 tests, including 8 new infrastructure tests.
+      passed; `mix test` passed with 29 tests, including 8 new infrastructure tests.
 - [ ] Complete Milestone 1 validation with `mix precommit`: attempted, but Mix
-  reports that the task could not be found. The required guardrail remains blocked.
+      reports that the task could not be found. The required guardrail remains blocked.
 - [ ] Design telemetry event contract
 - [ ] Instrument run lifecycle
 - [ ] Instrument model calls
@@ -236,3 +236,83 @@ must not be exposed through telemetry.
 
 Verification may continue to inspect trace evidence and must never depend on
 telemetry delivery.
+
+## Milestone 2 — Run lifecycle telemetry
+
+### Objective
+
+Instrument the complete `BeamAgent.API.run/2` lifecycle.
+
+The run span must cover startup, execution, verification, crash handling,
+timeout handling, and final result delivery.
+
+### Expected changes
+
+Emit:
+
+    [:beam_agent, :run, :start]
+    [:beam_agent, :run, :stop]
+    [:beam_agent, :run, :exception]
+
+The API layer owns the span because it can observe startup failures, runner
+crashes, and forced timeout termination.
+
+### Start event
+
+Measurements:
+
+- system_time
+- monotonic_time
+
+Metadata:
+
+- run_id
+- telemetry_span_context
+
+### Stop event
+
+Measurements:
+
+- duration
+- monotonic_time
+- iterations when available
+- tool_calls when available
+
+Metadata:
+
+- run_id
+- telemetry_span_context
+- outcome
+- execution_status
+- verification_status
+- error_type when applicable
+
+Handled BeamAgent errors, runner crashes, and execution timeouts emit `:stop`
+with `outcome: :error`.
+
+### Exception event
+
+Emit only when an error, throw, or exit escapes the API run boundary rather
+than being converted into a BeamAgent result.
+
+Raw error reasons and stacktraces must not be included in telemetry metadata.
+
+### Acceptance criteria
+
+- Every normal run emits exactly one start event and one terminal event.
+- Start and terminal events use the same run ID.
+- Start and terminal events use the same telemetry span context.
+- Successful runs report `outcome: :ok`.
+- Verification failures report `outcome: :error`.
+- Runner crashes are classified without exposing raw exceptions.
+- Hard execution timeouts are classified as `:execution_timeout`.
+- Startup failures are classified without exposing raw reasons.
+- No prompts, answers, model responses, tool arguments, or tool results appear
+  in metadata.
+- Existing BeamAgent return values remain unchanged.
+- Existing tests remain green.
+
+### Validation
+
+    mix precommit
+    git diff --check
