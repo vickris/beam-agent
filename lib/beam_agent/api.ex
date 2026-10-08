@@ -26,11 +26,40 @@ defmodule BeamAgent.API do
 
   The grace period exists so the graceful path normally wins the race —
   see the `@timeout_grace_ms` doc below.
+
+  ## Run telemetry
+
+  `run/2` emits `[:beam_agent, :run, :start]` and then `:stop` on a normal
+  return, or `:exception` when an error, throw, or exit escapes the API.
+  Handled failures, including runner crashes and timeouts, emit `:stop`.
+  External process termination can prevent a terminal event from being emitted.
+
+  All events carry the same opaque `:run_id` and `:telemetry_span_context`.
+  Start measurements are `:system_time` and `:monotonic_time`. Terminal
+  measurements are `:duration` and `:monotonic_time`, in native time units.
+  Duration covers the API boundary, including verification and timeout cleanup,
+  and is measured independently of `Run.duration_ms`. Stop events also include
+  integer `:iterations` and `:tool_calls` measurements when available.
+
+  Stop metadata includes `:outcome` (`:ok` or `:error`), `:execution_status`
+  (`:finished`, `:failed`, or `:unknown`), and `:verification_status` (`:passed`,
+  `:failed`, `:not_run`, or `:unknown`). Failures include an `:error_type`:
+  `:startup_failed`, `:verification_failed`, `:execution_failed`,
+  `:runner_crashed`, `:execution_timeout`, `:unknown_tool`,
+  `:max_iterations_reached`, `:max_tool_calls_reached`,
+  `:max_execution_time_reached`, `:max_context_messages_exceeded`,
+  `:context_limit_too_small`, or `:unexpected_result`.
+
+  Exception metadata contains only the correlation fields, `:error_type` set
+  to `:exception`, and `:kind` (`:error`, `:throw`, or `:exit`). The original
+  exception is re-raised unchanged. Execution content, raw errors, and
+  stacktraces are never included in telemetry.
   """
 
   alias BeamAgent.Run
   alias BeamAgent.RunSupervisor
   alias BeamAgent.Runner
+  alias BeamAgent.Telemetry
 
   # Extra time given to the runner beyond its own `:max_execution_time_ms`
   # guardrail before the API gives up on it. The guardrail is only checked
@@ -68,6 +97,39 @@ defmodule BeamAgent.API do
   """
   @spec run(String.t(), keyword()) :: {:ok, Run.t()} | {:error, Run.t()}
   def run(goal, opts) do
+    metadata = %{run_id: make_ref(), telemetry_span_context: make_ref()}
+    started_at = System.monotonic_time()
+
+    Telemetry.execute(
+      [:run, :start],
+      %{system_time: System.system_time(), monotonic_time: started_at},
+      metadata
+    )
+
+    try do
+      execute_run(goal, opts, metadata.run_id)
+    catch
+      kind, reason ->
+        Telemetry.execute(
+          [:run, :exception],
+          terminal_measurements(started_at),
+          Map.merge(metadata, %{kind: kind, error_type: :exception})
+        )
+
+        :erlang.raise(kind, reason, __STACKTRACE__)
+    else
+      {result, measurements, details} ->
+        Telemetry.execute(
+          [:run, :stop],
+          Map.merge(measurements, terminal_measurements(started_at)),
+          Map.merge(metadata, details)
+        )
+
+        result
+    end
+  end
+
+  defp execute_run(goal, opts, run_id) do
     timeout =
       opts
       |> Keyword.get(:guardrails, [])
@@ -76,24 +138,85 @@ defmodule BeamAgent.API do
     opts =
       opts
       |> Keyword.put(:goal, goal)
-      |> Keyword.put(:run_id, make_ref())
+      |> Keyword.put(:run_id, run_id)
 
     with {:ok, pid} <-
            RunSupervisor.start_run(opts) do
       monitor_ref = Process.monitor(pid)
       Runner.run(pid, self())
 
-      await_run(
-        pid,
-        monitor_ref,
-        goal,
-        timeout + @timeout_grace_ms
-      )
+      result =
+        await_run(
+          pid,
+          monitor_ref,
+          goal,
+          timeout + @timeout_grace_ms
+        )
+
+      {measurements, details} = run_details(result)
+      {result, measurements, details}
     else
       {:error, reason} ->
-        IO.puts("Could not start run due to this error: #{inspect(reason)}")
+        result = IO.puts("Could not start run due to this error: #{inspect(reason)}")
+
+        {result, %{},
+         %{
+           outcome: :error,
+           execution_status: :unknown,
+           verification_status: :unknown,
+           error_type: :startup_failed
+         }}
     end
   end
+
+  defp terminal_measurements(started_at) do
+    now = System.monotonic_time()
+    %{duration: now - started_at, monotonic_time: now}
+  end
+
+  defp run_details({outcome, %Run{} = run}) when outcome in [:ok, :error] do
+    measurements = %{iterations: run.iterations, tool_calls: run.tool_calls}
+
+    metadata = %{
+      outcome: outcome,
+      execution_status: run.execution_status,
+      verification_status: run.verification_status
+    }
+
+    case outcome do
+      :ok -> {measurements, metadata}
+      :error -> {measurements, Map.put(metadata, :error_type, run_error_type(run))}
+    end
+  end
+
+  # Preserve even an unexpected result message; observation must not change it.
+  defp run_details(_result) do
+    {%{},
+     %{
+       outcome: :error,
+       execution_status: :unknown,
+       verification_status: :unknown,
+       error_type: :unexpected_result
+     }}
+  end
+
+  defp run_error_type(%Run{verification_status: :failed}), do: :verification_failed
+
+  defp run_error_type(%Run{error: reason})
+       when reason in [:max_iterations_reached, :max_tool_calls_reached, :unknown_tool],
+       do: reason
+
+  defp run_error_type(%Run{error: {type, _details}})
+       when type in [
+              :runner_crashed,
+              :execution_timeout,
+              :max_execution_time_reached,
+              :max_context_messages_exceeded,
+              :context_limit_too_small
+            ],
+       do: type
+
+  defp run_error_type(_run), do: :execution_failed
 
   defp await_run(
          pid,

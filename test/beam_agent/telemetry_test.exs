@@ -62,6 +62,32 @@ defmodule BeamAgent.TelemetryTest do
     assert :ok = Telemetry.execute([:unobserved_foundation_test], %{count: 1}, %{})
   end
 
+  test "run classifications use finite field-specific allowlists" do
+    tag = attach([@event])
+
+    metadata = %{
+      outcome: :error,
+      execution_status: :failed,
+      verification_status: :not_run,
+      error_type: :execution_timeout,
+      kind: :exit
+    }
+
+    Telemetry.execute([:foundation_test], %{iterations: 2, tool_calls: 1}, metadata)
+    assert_receive {^tag, @event, %{iterations: 2, tool_calls: 1}, ^metadata}
+
+    for invalid <- ["secret", %{prompt: "secret"}, RuntimeError.exception("secret"), :secret] do
+      invalid_metadata = Map.new(metadata, fn {key, _} -> {key, invalid} end)
+      Telemetry.execute([:foundation_test], %{}, invalid_metadata)
+      assert_receive {^tag, @event, %{}, emitted}
+      assert emitted == %{}
+    end
+
+    Telemetry.execute([:foundation_test], %{}, %{outcome: :finished, execution_status: :ok})
+    assert_receive {^tag, @event, %{}, emitted}
+    assert emitted == %{}
+  end
+
   test "a failing handler does not propagate its exception" do
     handler_id = {__MODULE__, make_ref()}
     on_exit(fn -> :telemetry.detach(handler_id) end)
@@ -75,9 +101,9 @@ defmodule BeamAgent.TelemetryTest do
     refute Enum.any?(:telemetry.list_handlers(@event), &(&1.id == handler_id))
   end
 
-  test "the runtime does not emit instrumentation yet" do
+  test "the runtime does not emit later milestone instrumentation" do
     spans =
-      for operation <- [:run, :model, :tool, :verification],
+      for operation <- [:model, :tool, :verification],
           phase <- [:start, :stop, :exception],
           do: [:beam_agent, operation, phase]
 

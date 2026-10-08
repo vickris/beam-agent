@@ -112,7 +112,13 @@ users.
 - [ ] Complete Milestone 1 validation with `mix precommit`: attempted, but Mix
       reports that the task could not be found. The required guardrail remains blocked.
 - [ ] Design telemetry event contract
-- [ ] Instrument run lifecycle
+- [x] Implement Milestone 2 run lifecycle events owned by `API.run/2`.
+- [x] Validate Milestone 2 with `mix test`: 41 tests passed, including 12 new
+      tests for lifecycle events and classification allowlists. `git diff --check`
+      passed.
+- [ ] Complete Milestone 2 required validation: `mix precommit` still reports
+      that the task could not be found. The separate full formatting check also
+      fails on pre-existing formatting in `mix.exs`; that file remains unchanged.
 - [ ] Instrument model calls
 - [ ] Instrument tools
 - [ ] Instrument verification
@@ -204,6 +210,46 @@ Reason:
 The task is required by the plan but is not defined by the repository. Defining
 its checks is separate from telemetry foundation work; formatting and the full
 test suite passed, but they do not establish that this missing guardrail passed.
+
+### Milestone 2 API-owned run span
+
+Decision:
+
+Create the existing ephemeral run ID and a distinct span reference at API entry,
+before option processing or runner startup. Emit start in the caller, then one
+stop for a normal return or one exception for an escaping error, throw, or exit.
+Use API-local monotonic timestamps in native units, independently of
+`Run.duration_ms`, so verification and timeout cleanup remain inside the span.
+
+Reason:
+
+The caller can observe startup failures and runner termination. Instrumenting
+the runner instead would lose terminal events on hard timeout. External caller
+termination can still prevent a terminal event; telemetry is not durable storage.
+
+### Preserve returns while classifying failures
+
+Decision:
+
+Keep the existing startup failure output and `:ok` return, but emit stop with
+`outcome: :error`, unknown statuses, and `error_type: :startup_failed`. Completed
+run results retain their original values; handled runner crashes and hard
+timeouts emit stop. Unknown execution errors use `:execution_failed`, verifier
+rejections use `:verification_failed`, and unexpected result messages are
+returned unchanged with an `:unexpected_result` classification.
+
+Escaping errors, throws, and exits emit only correlation references,
+`error_type: :exception`, and finite `:kind`, then are re-raised with the original
+reason and stacktrace. Raw reasons and stacktraces never enter telemetry.
+
+Reason:
+
+Telemetry must not fix the known startup return-contract issue, leak execution
+content, or convert exceptions into successful returns. Field-specific finite
+allowlists admit only run outcome/status/error classifications. Counters are
+included only when integer values are available; crash and timeout results do
+not acquire invented counts. Tests cover both return paths and all three escape
+kinds, matching IDs, durations, privacy, verification lifetime, and concurrency.
 
 ## Open questions
 
@@ -316,3 +362,102 @@ Raw error reasons and stacktraces must not be included in telemetry metadata.
 
     mix precommit
     git diff --check
+
+## Milestone 4 — Verification, context, and guardrail telemetry
+
+### Objective
+
+Complete BeamAgent runtime instrumentation for verification, context
+compression, and guardrail rejection.
+
+### Verification events
+
+Emit:
+
+    [:beam_agent, :verification, :start]
+    [:beam_agent, :verification, :stop]
+    [:beam_agent, :verification, :exception]
+
+The span wraps only the configured verifier invocation.
+
+Metadata may include:
+
+- run_id
+- telemetry_span_context
+- verifier_module
+- outcome
+- verification_status
+- kind
+- error_type
+
+No trace contents, answer content, verifier reason, or Run struct may be
+included.
+
+No verification span should be emitted if execution fails before verification.
+
+### Context events
+
+Emit:
+
+    [:beam_agent, :context, :compressed]
+    [:beam_agent, :context, :compression_failed]
+
+Emit `:compressed` only when compression actually changes context.
+
+Measurements may include:
+
+- system_time
+- monotonic_time
+- count
+- before_count
+- after_count
+- compressed_messages
+- summary_chars
+- configured_max_messages
+- minimum_messages
+
+Metadata may include:
+
+- run_id
+- iteration
+- error_type
+
+Do not emit context messages or summary contents.
+
+### Guardrail event
+
+Emit:
+
+    [:beam_agent, :guardrail, :rejected]
+
+Emit only when execution is blocked by a guardrail.
+
+Measurements may include:
+
+- system_time
+- monotonic_time
+- count
+- observed
+- limit
+
+Metadata may include:
+
+- run_id
+- iteration
+- guardrail
+- phase
+- unit
+
+Guardrail, phase, and unit must use finite documented vocabularies.
+
+### Acceptance criteria
+
+- Verification emits matching start/terminal span events.
+- Verification failures use bounded classifications.
+- Context compression emits only when meaningful work occurs.
+- Compression failures do not expose context content.
+- Guardrail success emits no event.
+- Guardrail rejection emits exactly one event for the rejecting check.
+- All events reuse the current run_id.
+- Sensitive execution content is excluded.
+- Existing runtime behavior remains unchanged.
