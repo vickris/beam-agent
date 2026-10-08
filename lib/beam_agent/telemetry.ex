@@ -3,7 +3,22 @@ defmodule BeamAgent.Telemetry do
 
   # Internal emission boundary. Extend these allowlists only alongside a
   # documented event contract; never forward execution payloads or options.
-  @measurement_keys [:system_time, :monotonic_time, :duration, :count, :iterations, :tool_calls]
+  @measurement_keys [
+    :system_time,
+    :monotonic_time,
+    :duration,
+    :count,
+    :iterations,
+    :tool_calls,
+    :before_count,
+    :after_count,
+    :compressed_messages,
+    :summary_chars,
+    :configured_max_messages,
+    :minimum_messages,
+    :observed,
+    :limit
+  ]
   @error_types [
     :startup_failed,
     :verification_failed,
@@ -40,6 +55,20 @@ defmodule BeamAgent.Telemetry do
     )
   end
 
+  @doc "Emits a point event with native timestamps and count 1, applying the same allowlists."
+  @spec point([atom()], map(), map()) :: :ok
+  def point(event, measurements, metadata) do
+    execute(
+      event,
+      Map.merge(measurements, %{
+        system_time: System.system_time(),
+        monotonic_time: System.monotonic_time(),
+        count: 1
+      }),
+      metadata
+    )
+  end
+
   defp valid_metadata?({:run_id, value}), do: is_reference(value)
   defp valid_metadata?({:telemetry_span_context, value}), do: is_reference(value)
   defp valid_metadata?({:outcome, value}), do: value in [:ok, :error]
@@ -50,6 +79,13 @@ defmodule BeamAgent.Telemetry do
 
   defp valid_metadata?({:error_type, value}), do: value in @error_types
   defp valid_metadata?({:kind, value}), do: value in [:error, :exit, :throw]
+  defp valid_metadata?({:iteration, value}), do: is_integer(value) and value >= 0
+
+  defp valid_metadata?({:guardrail, value}),
+    do: value in [:max_iterations, :max_tool_calls, :max_context_messages, :max_execution_time]
+
+  defp valid_metadata?({:phase, value}), do: value in [:before_step, :before_tool, :context]
+  defp valid_metadata?({:unit, value}), do: value in [:count, :millisecond]
   defp valid_metadata?(_field), do: false
 
   defp allow(values, keys, valid?) do

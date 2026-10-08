@@ -52,6 +52,9 @@ Runs are `restart: :temporary` — a finished, failed, or crashed run is a
 terminal result to hand back to the caller, not a transient failure to
 retry, so there is no automatic restart.
 
+See the [telemetry reference](docs/telemetry.md) for the supported events and
+their measurement, metadata, and privacy contract.
+
 Two independent time limits can race, by design:
 
 - `BeamAgent.Guardrails`' `MaxExecutionTime` check runs *between* steps and
@@ -74,12 +77,13 @@ Two independent time limits can race, by design:
   claiming success without actually calling the tools it needed to —
   pluggable via `BeamAgent.Verifier.Behaviour` for domain-specific checks.
 - A full execution trace on every run, success or failure.
-- No dependencies — built entirely on stdlib/OTP.
+- Standard Elixir/OTP primitives, with `:telemetry` for optional runtime
+  observation.
 
 ## Development
 
 ```bash
-mix deps.get    # fetch deps (currently none declared)
+mix deps.get    # fetch dependencies
 mix compile      # compile
 mix test          # run the full test suite
 mix format          # format per .formatter.exs

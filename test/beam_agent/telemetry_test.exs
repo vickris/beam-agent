@@ -101,19 +101,13 @@ defmodule BeamAgent.TelemetryTest do
     refute Enum.any?(:telemetry.list_handlers(@event), &(&1.id == handler_id))
   end
 
-  test "the runtime does not emit later milestone instrumentation" do
+  test "the runtime does not emit model or tool instrumentation" do
     spans =
-      for operation <- [:model, :tool, :verification],
+      for operation <- [:model, :tool],
           phase <- [:start, :stop, :exception],
           do: [:beam_agent, operation, phase]
 
-    points = [
-      [:beam_agent, :context, :compressed],
-      [:beam_agent, :context, :compression_failed],
-      [:beam_agent, :guardrail, :rejected]
-    ]
-
-    tag = attach(spans ++ points)
+    tag = attach(spans)
 
     assert {:ok, _run} =
              BeamAgent.API.run("hello",
@@ -122,6 +116,52 @@ defmodule BeamAgent.TelemetryTest do
              )
 
     refute_received {^tag, _, _, _}
+  end
+
+  test "milestone 4 metadata uses field-specific finite vocabularies" do
+    tag = attach([@event])
+    valid = %{iteration: 0, guardrail: :max_iterations, phase: :before_step, unit: :count}
+    Telemetry.execute([:foundation_test], %{}, valid)
+    assert_receive {^tag, @event, %{}, ^valid}
+
+    for value <- [:secret, "secret", %{prompt: "secret"}, make_ref(), -1, 0.5] do
+      invalid = Map.new(valid, fn {key, _} -> {key, value} end)
+      Telemetry.execute([:foundation_test], %{}, invalid)
+      assert_receive {^tag, @event, %{}, metadata}
+      assert metadata == %{}
+    end
+
+    Telemetry.execute([:foundation_test], %{}, %{
+      guardrail: :count,
+      phase: :max_iterations,
+      unit: :context
+    })
+
+    assert_receive {^tag, @event, %{}, metadata}
+    assert metadata == %{}
+  end
+
+  test "point events reject payloads under numeric measurement names" do
+    tag = attach([@event])
+
+    keys = [
+      :before_count,
+      :after_count,
+      :compressed_messages,
+      :summary_chars,
+      :configured_max_messages,
+      :minimum_messages,
+      :observed,
+      :limit
+    ]
+
+    measurements = Map.new(keys, &{&1, %{secret: "private"}})
+    Telemetry.point([:foundation_test], measurements, %{iteration: %{secret: "private"}})
+    assert_receive {^tag, @event, emitted, metadata}
+    assert Map.keys(emitted) |> Enum.sort() == [:count, :monotonic_time, :system_time]
+    assert Enum.all?(emitted, fn {_, value} -> is_integer(value) end)
+    assert emitted.count == 1
+    assert metadata == %{}
   end
 
   def handle_event(event, measurements, metadata, {owner, tag}) do

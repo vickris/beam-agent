@@ -8,16 +8,20 @@ defmodule BeamAgent.MixProject do
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      aliases: aliases(),
       description: description(),
       package: package(),
       source_url: "https://github.com/vickris/beam-agent",
       homepage_url: "https://github.com/vickris/beam-agent",
       docs: [
         main: "readme",
-        extras: ["README.md"]
-      ],
-      
+        extras: ["README.md", "docs/telemetry.md"]
+      ]
     ]
+  end
+
+  def cli do
+    [preferred_envs: [precommit: :test]]
   end
 
   # Run "mix help compile.app" to learn about applications.
@@ -51,6 +55,7 @@ defmodule BeamAgent.MixProject do
         "lib",
         "mix.exs",
         "README.md",
+        "docs",
         "LICENSE",
         "CHANGELOG.md"
       ],

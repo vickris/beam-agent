@@ -121,11 +121,55 @@ users.
       fails on pre-existing formatting in `mix.exs`; that file remains unchanged.
 - [ ] Instrument model calls
 - [ ] Instrument tools
-- [ ] Instrument verification
-- [ ] Instrument context compression
-- [ ] Document events
+- [x] Instrument verification (Milestone 4): configured invocation only, with
+      sanitized start/stop/exception events and unchanged return/escape behavior.
+- [x] Instrument context compression (Milestone 4): actual compression and
+      explicit compression failure events; no-op preparation remains silent.
+- [x] Instrument guardrail rejection (Milestone 4) at the three consumption
+      boundaries; successful checks and failure propagation remain silent.
+- [x] Validate Milestone 4 with `mix test`: 57 tests passed, including 16 new
+      tests. `git diff --check` passed.
+- [x] Fix context-limit rejection coverage: unrecoverable compression now emits
+      one context guardrail rejection while preserving the original failure.
+      Follow-up validation: 60 tests passed, scoped formatting and
+      `git diff --check` passed; the existing global validation blockers remain.
+- [ ] Complete Milestone 4 required validation: `mix precommit` still reports
+      that the task could not be found. The full formatting check fails on the
+      existing `mix.exs` formatting; this milestone leaves that file unchanged.
+- [x] Document the implemented telemetry contract in `docs/telemetry.md` and
+      link it from the README and generated documentation.
+- [x] Complete Milestone 5 contract validation: strengthen the observed run
+      event sequence assertion, register the existing precommit alias, and pass
+      `mix precommit` (60 tests, 0 failures) and `git diff --check`.
 
 ## Decisions
+
+### Milestone 5 documents the emitted contract
+
+Decision:
+
+Document only the nine emitted event names: run and verification start/stop/
+exception, context compressed/compression_failed, and guardrail rejected.
+The planned model/tool spans are not implemented. The verifier span does not
+emit `verifier_module`. Context compression failure also emits a context
+guardrail rejection when the message limit blocks recovery. The reference
+specifies the exact current fields, finite classifications, native time units,
+correlation, and handler behavior.
+
+Reason:
+
+The draft reference and original plan included future fields and events.
+Changing runtime behavior for parity would extend this documentation milestone
+into instrumentation work. Existing tests already assert exact field sets,
+classification filtering, correlation, sensitive-data exclusion, and span
+terminal uniqueness; the added sequence assertion protects the run event names
+and terminal count across the runtime telemetry scenarios.
+
+The existing `precommit` alias was defined but not registered in `mix.exs`.
+Register it with the test environment and format the file so the required
+validation command runs. Include the telemetry reference in generated docs and
+the package, making the published contract accessible to users.
+
 
 ### Introduce an ephemeral run ID for telemetry correlation
 
@@ -250,6 +294,62 @@ allowlists admit only run outcome/status/error classifications. Counters are
 included only when integer values are available; crash and timeout results do
 not acquire invented counts. Tests cover both return paths and all three escape
 kinds, matching IDs, durations, privacy, verification lifetime, and concurrency.
+
+### Milestone 4 invocation and rejection boundaries
+
+Decision:
+
+Thread the existing run ID through private runner calls without changing the
+public Run or execution State structs. Wrap only the configured verifier's
+`verify/2` invocation, after constructing its candidate and before interpreting
+its result. Returned failures emit stop with `:verification_failed`; escaping
+errors, throws, and exits emit sanitized exception metadata and are re-raised.
+Metadata contains correlation references and bounded outcome/status/error
+classifications, with no verifier payload or module field needed in this scope.
+
+Emit context points only at actual compression or its explicit failure branch.
+The existing second context preparation and all runtime check ordering remain
+unchanged. A shared internal point emitter supplies native timestamps and
+`count: 1`; context measurements select documented numeric fields only.
+
+Reason:
+
+The events must describe work already performed without expanding their scope
+to result construction, verification decisions, or unrelated runtime changes.
+Standalone verifier and context calls remain uninstrumented, and execution
+failures never start verification spans.
+
+### Guardrail rejection projection and failed context recovery
+
+Decision:
+
+Use internal `BeamAgent.Guardrails.Telemetry.observe/5` at the runner's
+before-step, before-tool, and post-compression context checks. It returns the
+original result and projects only known failures into documented numeric
+measurements and finite guardrail/phase/unit metadata. Unknown reasons are not
+emitted. Guardrail modules themselves remain silent.
+
+Reason:
+
+One consumption-boundary emission avoids double counting when failures are
+propagated. The current compressor ensures the message bound whenever it
+succeeds, so the separate max-context rejection cannot normally be triggered
+through `API.run/2`. Its mapping is tested using a real over-limit
+`Guardrails.check_context/2` result passed through the same observation helper,
+without altering runtime behavior to make that branch reachable.
+
+Follow-up decision: when `:context_limit_too_small` prevents recovery, consume
+`Guardrails.check_context/2` at the compression failure boundary and emit one
+context guardrail rejection. Keep the compression failure event to describe the
+failed recovery attempt. The guardrail event measures actual rendered messages
+against the configured cap, not the compressor's minimum capacity. Preserve the
+original returned error and do not reject small caps before compression is
+needed. Successful compression remains recovery, so it emits no rejection.
+This replaces the earlier choice to emit only a context failure in this branch.
+Acceptance covers caps 0, 1, and 2, including failure after a tool call, matching
+run IDs, exactly one rejection, no verification, and a small-cap successful run.
+Validation: `mix precommit`, `mix format --check-formatted`, `mix test`, and
+`git diff --check`.
 
 ## Open questions
 
@@ -461,3 +561,59 @@ Guardrail, phase, and unit must use finite documented vocabularies.
 - All events reuse the current run_id.
 - Sensitive execution content is excluded.
 - Existing runtime behavior remains unchanged.
+
+## Milestone 5 — Documentation and contract validation
+
+### Objective
+
+Document BeamAgent's telemetry interface and protect its public observability
+contract from accidental drift.
+
+No new runtime instrumentation is introduced by this milestone.
+
+### Documentation
+
+Add a telemetry reference documenting:
+
+- event names
+- emission semantics
+- measurements
+- metadata
+- correlation identifiers
+- failure semantics
+- sensitive-data exclusions
+- handler execution behavior
+
+Clearly distinguish telemetry from `BeamAgent.Trace`.
+
+### Contract validation
+
+Add or strengthen tests protecting:
+
+- event names
+- allowed metadata fields
+- allowed measurement fields
+- bounded classification values
+- correlation between start and terminal events
+- absence of sensitive execution content
+- absence of duplicate terminal events
+
+Tests should fail if future instrumentation accidentally exposes prompts,
+responses, tool arguments, tool results, raw exceptions, or other
+execution content.
+
+### Acceptance criteria
+
+- All currently supported events are documented.
+- Measurement and metadata contracts are documented.
+- Sensitive-data exclusions are explicit.
+- Trace and telemetry responsibilities are clearly distinguished.
+- Handler execution semantics are documented.
+- Contract tests protect the documented schema.
+- No new runtime behavior is introduced.
+- All previous telemetry tests remain green.
+
+### Validation
+
+    mix precommit
+    git diff --check
